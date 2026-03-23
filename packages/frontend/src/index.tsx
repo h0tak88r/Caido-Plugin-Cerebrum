@@ -69,75 +69,108 @@ function parseHeaders(raw: string) {
 }
 
   // --- Commande 1: clic droit sur une ligne du tableau (RequestRowContext) ---
-  caido.commands.register("send-to-cerebrum-row", {
+  caido.commands.register("cerebrum:send-to-cerebrum-row", {
     name: "Send to Cerebrum (Table)",
     run: async (context: CommandContext) => {
-      if (context.type !== "RequestRowContext") return;
-      const slice = context.requests.slice(0, 10);
+      if (context.type !== "RequestRowContext") {
+        console.log("[Cerebrum] Wrong context type:", context.type);
+        return;
+      }
+      // Fix: SDK uses 'requestEntry' not 'requests'
+      const entries = (context as any).requestEntry || (context as any).requests || [];
+      if (!Array.isArray(entries) || entries.length === 0) {
+        caido.window.showToast("No requests selected", { duration: 3000 });
+        return;
+      }
+      const slice = entries.slice(0, 10);
       for (const r of slice) {
-        // On fetche tout via GraphQL
-        const gql = (await caido.graphql.request(
-          { id: r.id },
+        try {
+          // Fetch request data including nested response
+          const gql = (await caido.graphql.request(
+            { id: r.id },
+            `
+            query ($id: ID!) {
+              request(id: $id) {
+                method
+                url
+                headers { name value }
+                body
+                host
+                port
+                path
+                length
+                raw
+                createdAt
+                response {
+                  id
+                  statusCode
+                }
+              }
+            }
           `
-          query ($id: ID!) {
-            request(id: $id) {
-              method
-              url
-              headers { name value }
-              body
-              host
-              port
-              path
-              length
-              raw
-              createdAt
-              response { statusCode }
+          )) as unknown as {
+            request: {
+              method: string;
+              url: string;
+              headers: { name: string; value: string }[];
+              body?: string;
+              host: string;
+              port?: number;
+              path: string;
+              length?: number;
+              raw: string;
+              createdAt?: string;
+              response?: {
+                id: string;
+                statusCode?: number;
+              };
+            };
+          };
+
+          const req = gql.request;
+          if (!req || !req.raw) {
+            caido.window.showToast("Missing raw request", { duration: 3000 });
+            continue;
+          }
+
+          let responseRaw = "";
+          if (req.response?.id) {
+            try {
+              const resGql = await caido.graphql.response({ id: req.response.id });
+              responseRaw = resGql.response?.raw || `[DEBUG: Response empty]\\n\\nresGql Object:\\n${JSON.stringify(resGql, null, 2)}`;
+            } catch (err: any) {
+              responseRaw = `[DEBUG: Error]\\n\\n${err.toString()}`;
+              console.error("[Cerebrum] Nested response fetch error:", err);
             }
           }
-        `
-        )) as unknown as {
-          request: {
-            method: string;
-            url: string;
-            headers: { name: string; value: string }[];
-            body?: string;
-            host: string;
-            port?: number;
-            path: string;
-            length?: number;
-            raw: string;
-            createdAt?: string;
-            response?: { statusCode?: number };
-          };
-        };
 
-        const req = gql.request;
-        if (!req.raw) {
-          caido.window.showToast("Missing raw request", { duration: 3000 });
-          continue;
+          const statusStr =
+            req.response?.statusCode != null
+              ? req.response.statusCode.toString()
+              : "N/A";
+
+          await caido.backend.saveRequest({
+            time:      req.createdAt ?? new Date().toISOString(),
+            host:      req.host,
+            port:      req.port ?? 0,
+            path:      req.path,
+            isTls:     r.isTls,
+            reqRaw:    req.raw,
+            method:    req.method ?? "",
+            url:       req.url ?? "",
+            headers:   req.headers || [],
+            body:      req.body ?? "",
+            status:    statusStr,
+            reqLength: req.length ?? 0,
+            resRaw:    responseRaw,
+            resLength: responseRaw.length,
+          });
+
+          window.dispatchEvent(new Event("cerebrum:new-request"));
+        } catch (err) {
+          console.error("[Cerebrum] Error processing request:", err);
+          caido.window.showToast(`Error: ${err}`, { duration: 3000 });
         }
-
-        const statusStr =
-          req.response?.statusCode != null
-            ? req.response.statusCode.toString()
-            : "N/A";
-
-        await caido.backend.saveRequest({
-          time:      req.createdAt ?? new Date().toISOString(),
-          host:      req.host,
-          port:      req.port ?? 0,
-          path:      req.path,
-          isTls:     r.isTls,
-          reqRaw:    req.raw,
-          method:    req.method ?? "",
-          url:       req.url ?? "",
-          headers:   req.headers || [],
-          body:      req.body ?? "",
-          status:    statusStr,    // toujours string
-          reqLength: req.length ?? 0,
-        });
-
-        window.dispatchEvent(new Event("cerebrum:new-request"));
       }
       caido.window.showToast(`Sent ${slice.length} requests to Cerebrum`, {
         duration: 3000,
@@ -146,8 +179,10 @@ function parseHeaders(raw: string) {
   });
   caido.menu.registerItem({
     type: "RequestRow",
-    commandId: "send-to-cerebrum-row",
+    commandId: "cerebrum:send-to-cerebrum-row",
     leadingIcon: "fas fa-brain",
+    // @ts-ignore - The SDK types omit 'label' but the Caido UI requires it to show the menu
+    label: "Send to Cerebrum",
   });
 
   // --- Commande 2: clic droit dans l’éditeur (RequestContext) ---
@@ -191,6 +226,8 @@ function parseHeaders(raw: string) {
         body:      body,
         status:    statusStr,
         reqLength: raw.length,
+        resRaw:    "",
+        resLength: 0,
       });
 
       window.dispatchEvent(new Event("cerebrum:new-request"));

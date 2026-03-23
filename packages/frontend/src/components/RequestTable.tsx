@@ -144,6 +144,7 @@ export default function RequestTable({
         />
         <Column field="port" header="Port" sortable resizeable style={{ width: '5%' }}/>
         <Column field="reqLength" header="Req Length" sortable resizeable style={{ width: '6%' }}/>
+        <Column field="resLength" header="Res Length" sortable resizeable style={{ width: '6%' }}/>
 
         {/* Champ « Pending » si vous le gardez */}
         <Column
