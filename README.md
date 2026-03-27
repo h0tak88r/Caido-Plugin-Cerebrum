@@ -15,8 +15,7 @@
 
 ## 🚀 Screenshots
 
-![Main UI](./images/Cerebrum_v1.0.5.png)
-![Context Menu](./images/Cerebrum_v1_context.png)
+<img width="1280" height="1319" alt="image" src="https://github.com/user-attachments/assets/b5762a5c-e8fd-4496-988d-012bacfcae29" />
 
 ## 🛠 Usage
 
