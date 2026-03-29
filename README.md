@@ -14,8 +14,8 @@
 - All data persisted locally in SQLite via Caido's plugin API
 
 ## 🚀 Screenshots
+<img width="2560" height="1319" alt="image" src="https://github.com/user-attachments/assets/2a2c2bb1-cde7-478c-b255-721c6e60287e" />
 
-<img width="1280" height="1319" alt="image" src="https://github.com/user-attachments/assets/b5762a5c-e8fd-4496-988d-012bacfcae29" />
 
 ## 🛠 Usage
 
