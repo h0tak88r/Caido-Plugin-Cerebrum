@@ -1,6 +1,6 @@
 // src/Organizer.tsx
 
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { InputText } from "primereact/inputtext";
 import RequestTable from "./components/RequestTable";
 import RequestDetails from "./components/RequestDetails";
@@ -59,16 +59,15 @@ export default function Organizer({ initialRequests }: OrganizerProps) {
     return () => window.removeEventListener("hashchange", onHashChange);
   }, [reloadAll]);
 
-  // 3) Bug 1 Fix: capture unsubscribe from onEvent to avoid listener leak
+  // 3) Bug 1 Fix: ignore callback if unmounted (Caido SDK may not provide an unsubscribe for onEvent)
   useEffect(() => {
+    let mounted = true;
     const handler = () => {
-      reloadAll();
+      if (mounted) reloadAll();
     };
-    const unsubscribe = sdk.backend.onEvent("new-request", handler);
+    sdk.backend.onEvent("new-request", handler);
     return () => {
-      if (typeof unsubscribe === "function") {
-        unsubscribe();
-      }
+      mounted = false;
     };
   }, [sdk.backend, reloadAll]);
 

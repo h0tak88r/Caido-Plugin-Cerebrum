@@ -105,7 +105,7 @@ async function insertRequest(db: Awaited<ReturnType<SDK["meta"]["db"]>>, sdk: SD
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
    `);
 
-  const result = await stmt.run(
+  await stmt.run(
     req.time,
     req.host,
     req.path,
