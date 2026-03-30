@@ -3,7 +3,7 @@ import ReactDOM from "react-dom/client";
 import type { Caido } from "@caido/sdk-frontend";
 import type { BackendAPI, BackendEvents } from "backend";
 import { SDKProvider, useSDK } from "./plugins/sdk";
-import Cerebrum from "./Cerebrum";
+import Organizer from "./Organizer";
 import type { CommandContext } from "@caido/sdk-frontend/src/types";
 import type { CerebrumEntry } from "../../backend/src/index";
 
@@ -25,17 +25,17 @@ function App() {
     const handler = () => {
       sdk.backend.getAllRequests().then(setAllRequests);
     };
-    window.addEventListener("cerebrum:page-show", handler);
-    return () => window.removeEventListener("cerebrum:page-show", handler);
+    window.addEventListener("organizer:page-show", handler);
+    return () => window.removeEventListener("organizer:page-show", handler);
   }, [sdk.backend]);
 
-  return <Cerebrum initialRequests={allRequests} />;
+  return <Organizer initialRequests={allRequests} />;
 } 
 
 export function init(caido: CaidoSDK) {
-  // --- Setup de votre UI principal ---
+  // --- Setup main UI ---
   const rootEl = document.createElement("div");
-  rootEl.id = "plugin--cerebrum";
+  rootEl.id = "plugin--organizer";
   Object.assign(rootEl.style, { width: "100%", height: "100%" });
 
   ReactDOM.createRoot(rootEl).render(
@@ -46,37 +46,35 @@ export function init(caido: CaidoSDK) {
     </React.StrictMode>
   );
 
-  caido.navigation.addPage("/cerebrum", { body: rootEl });
-  const sidebarItem = caido.sidebar.registerItem("Cerebrum", "/cerebrum", {
-    icon: "fas fa-brain",
+  caido.navigation.addPage("/organizer", { body: rootEl });
+  const sidebarItem = caido.sidebar.registerItem("Organizer", "/organizer", {
+    icon: "fas fa-folder-open",
   });
 
-  // --- Helper pour parser les headers depuis le raw ---
-function parseHeaders(raw: string) {
-  const lines = raw.split(/\r?\n/);
-  const headerLines = lines.slice(1).filter((l) => l.includes(":"));
-  const headers: { name: string; value: string }[] = [];
-  for (const line of headerLines) {
-    const idx = line.indexOf(":");
-    if (idx > 0) {
-      // ici name pouvait être undefined selon TS
-      const name = line.slice(0, idx).trim();
-      const value = line.slice(idx + 1).trim();
-      headers.push({ name, value });
+  // --- Helper to parse headers from raw request ---
+  function parseHeaders(raw: string) {
+    const lines = raw.split(/\r?\n/);
+    const headerLines = lines.slice(1).filter((l) => l.includes(":"));
+    const headers: { name: string; value: string }[] = [];
+    for (const line of headerLines) {
+      const idx = line.indexOf(":");
+      if (idx > 0) {
+        const name = line.slice(0, idx).trim();
+        const value = line.slice(idx + 1).trim();
+        headers.push({ name, value });
+      }
     }
+    return headers;
   }
-  return headers;
-}
 
-  // --- Commande 1: clic droit sur une ligne du tableau (RequestRowContext) ---
-  caido.commands.register("cerebrum:send-to-cerebrum-row", {
-    name: "Send to Cerebrum (Table)",
+  // --- Command 1: right-click on a table row (RequestRowContext) ---
+  caido.commands.register("organizer:send-to-organizer-row", {
+    name: "Send to Organizer (Table)",
     run: async (context: CommandContext) => {
       if (context.type !== "RequestRowContext") {
-        console.log("[Cerebrum] Wrong context type:", context.type);
+        console.log("[Organizer] Wrong context type:", context.type);
         return;
       }
-      // Fix: SDK uses 'requestEntry' not 'requests'
       const entries = (context as any).requestEntry || (context as any).requests || [];
       if (!Array.isArray(entries) || entries.length === 0) {
         caido.window.showToast("No requests selected", { duration: 3000 });
@@ -140,7 +138,7 @@ function parseHeaders(raw: string) {
               responseRaw = resGql.response?.raw || `[DEBUG: Response empty]\\n\\nresGql Object:\\n${JSON.stringify(resGql, null, 2)}`;
             } catch (err: any) {
               responseRaw = `[DEBUG: Error]\\n\\n${err.toString()}`;
-              console.error("[Cerebrum] Nested response fetch error:", err);
+              console.error("[Organizer] Nested response fetch error:", err);
             }
           }
 
@@ -166,28 +164,28 @@ function parseHeaders(raw: string) {
             resLength: responseRaw.length,
           });
 
-          window.dispatchEvent(new Event("cerebrum:new-request"));
+          window.dispatchEvent(new Event("organizer:new-request"));
         } catch (err) {
-          console.error("[Cerebrum] Error processing request:", err);
+          console.error("[Organizer] Error processing request:", err);
           caido.window.showToast(`Error: ${err}`, { duration: 3000 });
         }
       }
-      caido.window.showToast(`Sent ${slice.length} requests to Cerebrum`, {
+      caido.window.showToast(`Sent ${slice.length} requests to Organizer`, {
         duration: 3000,
       });
     },
   });
   caido.menu.registerItem({
     type: "RequestRow",
-    commandId: "cerebrum:send-to-cerebrum-row",
-    leadingIcon: "fas fa-brain",
+    commandId: "organizer:send-to-organizer-row",
+    leadingIcon: "fas fa-folder-open",
     // @ts-ignore - The SDK types omit 'label' but the Caido UI requires it to show the menu
-    label: "Send to Cerebrum",
+    label: "Send to Organizer",
   });
 
-  // --- Commande 2: clic droit dans l’éditeur (RequestContext) ---
-  caido.commands.register("send-to-cerebrum-editor", {
-    name: "Send to Cerebrum (Editor)",
+  // --- Command 2: right-click in the editor (RequestContext) ---
+  caido.commands.register("organizer:send-to-organizer-editor", {
+    name: "Send to Organizer (Editor)",
     run: async (context: CommandContext) => {
       if (context.type !== "RequestContext") return;
       const r = context.request;
@@ -197,17 +195,14 @@ function parseHeaders(raw: string) {
         return;
       }
 
-      // Ligne de requête
       const lines = raw.split(/\r?\n/);
       const firstLine = lines[0] ?? "";
       const [method = "", rawPath = r.path] = firstLine.split(" ");
 
-      // Reconstruction de l’URL
       const url = `${r.isTls ? "https" : "http"}://${r.host}${
         rawPath.startsWith("/") ? rawPath : `/${rawPath}`
       }`;
 
-      // Corps (après la ligne vide)
       const parts = raw.split(/\r?\n\r?\n/);
       const body = parts.length > 1 ? parts.slice(1).join("\r\n\r\n") : "";
 
@@ -230,30 +225,30 @@ function parseHeaders(raw: string) {
         resLength: 0,
       });
 
-      window.dispatchEvent(new Event("cerebrum:new-request"));
-      caido.window.showToast(`Sent 1 request to Cerebrum`, { duration: 3000 });
+      window.dispatchEvent(new Event("organizer:new-request"));
+      caido.window.showToast(`Sent 1 request to Organizer`, { duration: 3000 });
     },
   });
   
   caido.menu.registerItem({
     type: "Request",
-    commandId: "send-to-cerebrum-editor",
-    leadingIcon: "fas fa-brain",
+    commandId: "organizer:send-to-organizer-editor",
+    leadingIcon: "fas fa-folder-open",
   });
 
 
   let badgeCount = 0;
   sidebarItem.setCount(0);
   
-    window.addEventListener("cerebrum:new-request", () => {
-    badgeCount += 1;                           // incrément manuel
-    sidebarItem.setCount(badgeCount); // passe un nombre
+  window.addEventListener("organizer:new-request", () => {
+    badgeCount += 1;
+    sidebarItem.setCount(badgeCount);
   });
 
-window.addEventListener("cerebrum:clear-badge", () => {
-  badgeCount = 0; 
-  sidebarItem.setCount(0);
-});
+  window.addEventListener("organizer:clear-badge", () => {
+    badgeCount = 0; 
+    sidebarItem.setCount(0);
+  });
 }
 
 

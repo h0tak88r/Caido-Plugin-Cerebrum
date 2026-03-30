@@ -8,11 +8,11 @@ import path from 'path';
 import prefixwrap from 'postcss-prefixwrap';
 
 // Unique ID for plugin (used as root CSS scope)
-const id = 'cerebrum';
+const id = 'organizer';
 
 export default defineConfig({
-  id: 'cerebrum',
-  name: 'Cerebrum',
+  id: 'organizer',
+  name: 'Organizer',
   description: 'A simple organizer-like plugin for Caido to help you manage, annotate, and sort HTTP requests.',
   version: '1.0.7',
   author: {

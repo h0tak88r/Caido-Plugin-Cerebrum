@@ -1,6 +1,6 @@
-# Cerebrum for Caido
+# Organizer for Caido
 
-🧠 A powerful organizer plugin for [Caido](https://caido.io) to help you manage, annotate, and analyze HTTP requests **and their full responses**.
+📁 A powerful organizer plugin for [Caido](https://caido.io) to help you manage, annotate, and analyze HTTP requests **and their full responses**.
 
 ## ✨ Features
 
@@ -9,7 +9,7 @@
 - Add custom notes and statuses: `Not touched`, `Pending`, `Finished`, `Important`
 - Filter saved requests by status, search, and other fields
 - `Req Length` and **`Res Length`** columns in the request table for quick size analysis
-- Right-click context menu integration in HTTP History ("Send to Cerebrum")
+- Right-click context menu integration in HTTP History ("Send to Organizer")
 - Inline right-click menu to delete saved requests
 - All data persisted locally in SQLite via Caido's plugin API
 
@@ -20,8 +20,8 @@
 ## 🛠 Usage
 
 1. Install the plugin from `dist/plugin_package.zip` in Caido's Plugin Manager
-2. In **HTTP History**, right-click any request → **"Send to Cerebrum (Table)"**
-3. Open the **Cerebrum** tab from the sidebar
+2. In **HTTP History**, right-click any request → **"Send to Organizer (Table)"**
+3. Open the **Organizer** tab from the sidebar
 4. Click any saved entry to view the full Request / Response split view
 5. Add notes, set a status, and save
 
@@ -44,6 +44,7 @@ Response data is stored in the plugin's SQLite database alongside request data:
 | `status` | TEXT | User-assigned status |
 | `note` | TEXT | User-assigned note |
 
+
 > Existing installs are automatically migrated via `ALTER TABLE` on first load.
 
 ## 📁 Structure
@@ -54,7 +55,7 @@ packages/
 └── frontend/
     └── src/
         ├── index.tsx             # Plugin entry — commands, menu registration
-        ├── Cerebrum.tsx          # Main UI component
+        ├── Organizer.tsx         # Main UI component
         └── components/
             ├── RequestTable.tsx  # Saved requests table (with Res Length col)
             ├── RequestDetails.tsx# Split request/response view + note editor
