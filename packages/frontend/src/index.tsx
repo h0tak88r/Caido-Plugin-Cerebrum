@@ -183,46 +183,113 @@ export function init(caido: CaidoSDK) {
     label: "Send to Organizer",
   });
 
-  // --- Command 2: right-click in the editor (RequestContext) ---
+  // --- Command 2: right-click in the editor (RequestContext or ResponseContext) ---
   caido.commands.register("organizer:send-to-organizer-editor", {
     name: "Send to Organizer (Editor)",
     run: async (context: CommandContext) => {
-      if (context.type !== "RequestContext") return;
-      const r = context.request;
-      const raw = r.raw;
-      if (!raw) {
-        caido.window.showToast("No raw HTTP in editor", { duration: 3000 });
+      if (context.type !== "RequestContext" && context.type !== "ResponseContext") return;
+
+      const r = (context as any).request;
+      let rawRequest = "";
+      let rawResponse = "";
+      let method = "";
+      let finalUrl = "";
+      let reqBody = "";
+      let statusStr = "N/A";
+      let time = new Date().toISOString();
+      let fetchGqlSuccess = false;
+
+      // If we have a request ID, we can fetch everything from GraphQL (Request + Response)
+      if (r?.id) {
+        try {
+          const gql = (await caido.graphql.request(
+            { id: r.id },
+            `
+            query ($id: ID!) {
+              request(id: $id) {
+                method
+                url
+                headers { name value }
+                body
+                host
+                port
+                path
+                length
+                raw
+                createdAt
+                response {
+                  id
+                  statusCode
+                }
+              }
+            }
+          `
+          )) as any;
+
+          const req = gql?.request;
+          if (req && req.raw) {
+            rawRequest = req.raw;
+            method = req.method ?? "";
+            finalUrl = req.url ?? "";
+            reqBody = req.body ?? "";
+            time = req.createdAt ?? time;
+            
+            if (req.response?.id) {
+              const resGql = await caido.graphql.response({ id: req.response.id });
+              rawResponse = resGql.response?.raw || "";
+              statusStr = req.response.statusCode?.toString() || "N/A";
+            }
+            fetchGqlSuccess = true;
+          }
+        } catch (err) {
+          console.error("[Organizer] Failed to fetch GraphQL for editor context", err);
+        }
+      }
+
+      // If GraphQL failed or there's no ID (e.g., unsent request in Replay), fallback to data available in context
+      if (!fetchGqlSuccess) {
+        if (context.type === "RequestContext") {
+          rawRequest = r?.raw || "";
+        } else if (context.type === "ResponseContext") {
+          const res = (context as any).response;
+          rawResponse = res?.raw || "";
+          statusStr = res?.statusCode?.toString() || "N/A";
+        }
+
+        if (rawRequest) {
+          const lines = rawRequest.split(/\r?\n/);
+          const firstLine = lines[0] ?? "";
+          const [parsedMethod = "", rawPath = r?.path || ""] = firstLine.split(" ");
+          method = parsedMethod;
+          finalUrl = `${r?.isTls ? "https" : "http"}://${r?.host || ""}${
+            (rawPath || "").startsWith("/") ? rawPath : `/${rawPath || ""}`
+          }`;
+          
+          const parts = rawRequest.split(/\r?\n\r?\n/);
+          reqBody = parts.length > 1 ? parts.slice(1).join("\r\n\r\n") : "";
+        }
+      }
+
+      if (!rawRequest && !rawResponse) {
+        caido.window.showToast("No HTTP data available in editor", { duration: 3000 });
         return;
       }
 
-      const lines = raw.split(/\r?\n/);
-      const firstLine = lines[0] ?? "";
-      const [method = "", rawPath = r.path] = firstLine.split(" ");
-
-      const url = `${r.isTls ? "https" : "http"}://${r.host}${
-        rawPath.startsWith("/") ? rawPath : `/${rawPath}`
-      }`;
-
-      const parts = raw.split(/\r?\n\r?\n/);
-      const body = parts.length > 1 ? parts.slice(1).join("\r\n\r\n") : "";
-
-      const statusStr = "N/A";
-
       await caido.backend.saveRequest({
-        time:      new Date().toISOString(),
-        host:      r.host,
-        port:      r.port,
-        path:      r.path,
-        isTls:     r.isTls,
-        reqRaw:    raw,
+        time:      time,
+        host:      r?.host || "",
+        port:      r?.port || 0,
+        path:      r?.path || "/",
+        isTls:     r?.isTls || false,
+        reqRaw:    rawRequest,
         method:    method,
-        url:       url,
-        headers:   parseHeaders(raw),
-        body:      body,
+        url:       finalUrl || `${r?.isTls ? "https" : "http"}://${r?.host || ""}${r?.path || "/"}`,
+        headers:   rawRequest ? parseHeaders(rawRequest) : [],
+        body:      reqBody,
         status:    statusStr,
-        reqLength: raw.length,
-        resRaw:    "",
-        resLength: 0,
+        reqLength: rawRequest.length,
+        resRaw:    rawResponse,
+        resLength: rawResponse.length,
       });
 
       window.dispatchEvent(new Event("organizer:new-request"));
@@ -232,6 +299,12 @@ export function init(caido: CaidoSDK) {
   
   caido.menu.registerItem({
     type: "Request",
+    commandId: "organizer:send-to-organizer-editor",
+    leadingIcon: "fas fa-folder-open",
+  });
+
+  caido.menu.registerItem({
+    type: "Response",
     commandId: "organizer:send-to-organizer-editor",
     leadingIcon: "fas fa-folder-open",
   });
